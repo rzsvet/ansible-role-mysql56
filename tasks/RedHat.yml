@@ -2,6 +2,8 @@
 - name: MYSQL | Disable new version Mysql
   ansible.builtin.shell: |
     dnf module disable mysql -y
+  register: add_disable_mysql
+  changed_when: add_disable_mysql.rc != 0
 #    dnf remove @mysql
 #    dnf module reset mysql
 
@@ -17,6 +19,8 @@
   ansible.builtin.shell: |
     dnf config-manager --disable mysql80-community
     dnf config-manager --enable mysql56-community
+  register: add_repo
+  changed_when: add_repo.rc != 0
 - name: MYSQL | Install Mysql
   ansible.builtin.dnf:
     name:
@@ -66,6 +70,8 @@
     state: present
 - name: MySQL | Apply new SELinux file context to filesystem
   ansible.builtin.command: restorecon -irv /var/log/mysql
+  register: add_selinux
+  changed_when: add_selinux.rc != 0
 - name: MYSQL | Enable and start service
   systemd:
     name: mysqld
