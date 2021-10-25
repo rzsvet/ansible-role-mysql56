@@ -1,0 +1,97 @@
+---
+- name: MYSQL | Disable new version Mysql
+  ansible.builtin.shell: |
+    dnf module disable mysql -y
+#    dnf remove @mysql
+#    dnf module reset mysql
+
+- name: MySQL | create MySQL repo file
+  template:
+    src: mysql-community.repo.j2
+    dest: /etc/yum.repos.d/mysql-community.repo
+    backup: yes
+    owner: root
+    group: root
+    mode: 0644
+- name: MYSQL | Enable Mysql 5.6 Community Server
+  ansible.builtin.shell: |
+    dnf config-manager --disable mysql80-community
+    dnf config-manager --enable mysql56-community
+- name: MYSQL | Install Mysql
+  ansible.builtin.dnf:
+    name:
+      - mysql-community-server
+    state: latest
+- name: MYSQL | Install Python
+  ansible.builtin.dnf:
+    name:
+      - python3
+      - python3-pip
+    state: latest
+- name: MYSQL | Install Required pip modules
+  pip:
+    name:
+      - PyMySQL
+    state: present
+    executable: pip3
+- name: MYSQL | Create folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: "0755"
+  with_items:
+    - /etc/mysqld
+    - /etc/mysqld/conf.d
+    - /var/log/mysql
+- name: MySQL | create MySQL configuration file
+  template:
+    src: my.cnf.j2
+    dest: /etc/my.cnf
+    backup: yes
+    owner: mysql
+    group: mysql
+    mode: 0644
+- name: "MySQL | Allow mysql to listen on tcp port {{ mysql_port }}"
+  community.general.seport:
+    ports: "{{ mysql_port }}"
+    proto: tcp
+    setype: mysqld_port_t
+    state: present
+- name: MySQL | Allow mysqld to modify files in /var/log/mysql
+  community.general.sefcontext:
+    target: "/var/log/mysql(/.*)?"
+    setype: mysqld_log_t
+    state: present
+- name: MySQL | Apply new SELinux file context to filesystem
+  ansible.builtin.command: restorecon -irv /var/log/mysql
+- name: MYSQL | Enable and start service
+  systemd:
+    name: mysqld
+    state: started
+    enabled: yes
+- name: MYSQL | Show password for database
+  debug:
+    msg:
+      - "*===============================*"
+      - "* CHANGE PASSWORD AFTER INSTALL *"
+      - "* User: root                    *"
+      - "* Password: {{ mysql_default_password }} *"
+      - "*===============================*"
+- name: MySQL | Setup password for root user
+  community.mysql.mysql_user:
+    login_password: "{{ mysql_default_password }}"
+    login_port: "{{ mysql_port }}"
+    check_implicit_admin: yes
+    name: root
+    host: "{{ item }}"
+    password: "{{ mysql_default_password }}"
+    state: present
+  with_items:
+    - localhost
+    - 127.0.0.1
+    - ::1
+    - "%"
+  notify:
+    - MYSQL | Restart database

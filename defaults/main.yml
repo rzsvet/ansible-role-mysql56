@@ -1,0 +1,4 @@
+---
+mysql_default_password: "root"
+mysql_dump: ""
+mysql_port: 3306
